@@ -1,103 +1,117 @@
-# P104-100 PCIe 链路研究
+# P104-100 PCIe Link Research
 
-> 一张 NVIDIA P104-100（GP104 / Pascal 矿卡）的 PCIe 链路速率、链路宽度、视频编解码引擎的完整实测研究。
+**English** | [中文](README.zh-CN.md)
+
+> A complete, measurement-driven investigation into the PCIe link speed, link width, and
+> video codec engines of one NVIDIA **P104-100** (GP104 / Pascal mining card).
 >
-> **唯一实用成果：Gen1 x4 → Gen2 x4，单向带宽约翻倍（0.78 → 1.55 GB/s）。**
-> 其余三条路（Gen3 / x16 宽度 / 编解码器）都给出了明确结论与证据，包括"为什么不行"。
+> **The only practical result: Gen1 x4 → Gen2 x4, roughly doubling unidirectional bandwidth
+> (0.78 → 1.55 GB/s).** The other three directions (Gen3 / x16 width / codecs) are documented
+> with explicit conclusions *and evidence*, including **why they are not possible**.
 
-本项目是一个**测量与逆向工程记录**，不是破解教程、不提供任何绕过设备限制的用途。
-所有结论都标注了证据强度，所有失败路径都如实保留（见 [`docs/03-走过的弯路.md`](docs/03-走过的弯路.md)）。
+This project is a **measurement and reverse-engineering record** — not a cracking tutorial,
+and not a tool for bypassing device restrictions. Every conclusion carries an evidence-strength
+label, and every dead end is preserved as-is (see [`docs/03-走过的弯路.md`](docs/03-走过的弯路.md)).
 
 ---
 
-## 一句话结论
+## Conclusions at a glance
 
-| 方向 | 结论 | 强度 |
+| Direction | Conclusion | Strength |
 |---|---|---|
-| **Gen2 x4（5.0 GT/s）** | ✅ **可达成且稳定**，带宽约翻倍 | 【实测】可复现，工具已封装 |
-| **Gen3 x4（8.0 GT/s）** | ❌ **不可达成**。端点主动拒绝：把它设成 Gen3 目标速率会被硬件即时钳回 Gen2 | 【实测】4527 次尝试全部被钳回 |
-| **链路宽度 x4 → x16** | ❌ **改不了**，且**不建议焊接电容**。端点声明最大宽度就是 x4，链路宽度 = min(两端声明) | 【实测】+【强支持】 |
-| **NVENC / NVDEC 编解码器** | ❓ **未解**。引擎硬件在、驱动代码路径在，但被固件/熔丝层挡住 | 【强支持】未找到主机侧入口 |
+| **Gen2 x4 (5.0 GT/s)** | ✅ **Achievable and stable** — bandwidth roughly doubled | 【Measured】Reproducible, tool packaged |
+| **Gen3 x4 (8.0 GT/s)** | ❌ **Not achievable.** The endpoint itself refuses: setting Gen3 as the target rate is clamped back to Gen2 by hardware immediately | 【Measured】All 4527 attempts clamped back |
+| **Link width x4 → x16** | ❌ **Cannot be changed**, and **soldering capacitors is not recommended**. The endpoint declares x4 as its maximum width; link width = min(both ends' declarations) | 【Measured】+【Strong support】 |
+| **NVENC / NVDEC codecs** | ❓ **Unresolved.** Engine hardware exists, driver code paths exist, but they are blocked at the firmware/fuse layer | 【Strong support】No host-side entry point found |
 
-**Gen3 不是"还没找到方法"，而是设备自己拒绝** —— 这是本项目能给出的最强形式的阴性结论。
-依据是五条互相独立的证据链，见 [`docs/01-技术报告.md`](docs/01-技术报告.md) 第 4 节。
+**Gen3 is not "we haven't found the method yet" — the device itself refuses.**
+This is the strongest form of negative conclusion this project can offer. It rests on five
+mutually independent lines of evidence — see §4 of [`docs/01-技术报告.md`](docs/01-技术报告.md).
 
 ---
 
-## 下载
+## Download
 
-**→ 工具包在 [Releases](../../releases) 页面。**
+**→ Tool packages are on the [Releases](../../releases) page.**
 
-| 文件 | 内容 |
+| File | Contents |
 |---|---|
-| `P104-Gen2x4-v1.5.zip` | PCIe Gen2 x4 解锁工具（含源码、说明、状态检查脚本） |
+| `P104-Gen2x4-v1.5.zip` | PCIe Gen2 x4 unlock tool (source, docs, status-check scripts included) |
 
-> 注意：本仓库只提供 **P104-100 PCIe 链路**相关的研究与工具。
-> 不包含任何 VBIOS 读取/刷写工具 —— 本项目明确不建议刷写 VBIOS（理由见技术报告）。
+> Note: this repository only covers **P104-100 PCIe link** research and tooling.
+> It does **not** include any VBIOS reader/flasher — this project explicitly recommends
+> against flashing VBIOS (see the technical report for reasoning).
 
 ---
 
-## 仓库分层（★ 先看这个，再找文件）
+## Repository layout
 
-本仓库分**两层**，发布时只分发第一层：
+The repository has **two layers**; only the first is distributed:
 
-| 层 | 内容 | 是否随发布包分发 |
+| Layer | Contents | Shipped in releases |
 |---|---|---|
-| **公开层** | `README.md` + `docs/` + `tools/` + 工具发布包 | ✅ 是 |
-| **内部层** | `notes/_archive/`（原始实验记录）、`_internal/`（工作区内部导航）、`_scratch/`（开发脚本） | ❌ 否 |
+| **Public** | `README.md` + `docs/` + `tools/` + tool release packages | ✅ Yes |
+| **Internal** | `notes/_archive/` (raw experiment logs), `_internal/` (workspace navigation), `_scratch/` (dev scripts) | ❌ No |
 
-`notes/_archive/` 里是几十份**原始实验报告与运行日志**（含当时工作过程的原始表述）。
-它们**保留原样、用于证据追溯，不随发布包分发**（`.gitignore` 已排除）。
-公开文档（`docs/`）只保留结论与决定性证据；两者冲突时**以 `docs/` 为准**。
-
-## 这个仓库里有什么
-
-```
-README.md                  ← 你正在读的文件
-docs/                      ★ 公开文档（每份都附 .txt 纯文本版）
-  01-技术报告.md           核心：三条路的结论 + 决定性证据 + 方法学
-  02-工具说明.md           解锁工具的用法、常见问题、排错
-  03-走过的弯路.md         已作废的结论与被推翻的判断（★ 避免重复踩坑）
-  04-硬件事实表.md         寄存器位域 / 熔丝映射 / 实测值 / 危险操作清单
-tools/                     辅助脚本（带宽测试、编解码器探测等）
-（工具发布包）              Gen2 解锁工具，以独立发布包形式提供
-notes/_archive/            [不发布] 原始过程记录
-_internal/                 [不发布] 工作区内部导航
-```
-
-**关于工具发布包**：Gen2 解锁工具以**独立发布包**形式提供，
-**目录/压缩包名可能随版本变化** —— 以 releases 页面与实际解压后的目录为准。
-命令名（`install.cmd` / `status.cmd` / `check-bw.cmd` / `uninstall.cmd`）与用法见
-[`docs/02-工具说明.md`](docs/02-工具说明.md)。另有一个通用的 VBIOS 读取器（GUI + CLI）
-作为独立工具维护，同样见 releases。
-
-寄存器位域定义与驱动源码参考位于开发工作区的 `_scratch/refs/`
-（envytools rnndb + nouveau 源码，**不随发布包分发**；`04-硬件事实表.md` 已转载本项目用到的全部位域）。
+`notes/_archive/` holds dozens of **raw experiment reports and run logs** (with their original
+wording). They are **kept as-is for evidence traceability and are not distributed**
+(excluded via `.gitignore`). The public docs (`docs/`) keep only conclusions and decisive
+evidence; where the two conflict, **`docs/` wins**.
 
 ---
 
-## 快速开始（三步验证 Gen2 是否可达成）
+## What's in here
 
-> 仅适用于 **NVIDIA P104-100（`10DE:1B87`）+ Windows 10/11 x64 + 管理员权限**。
-> 工具需要两个内核驱动来读写 GPU 寄存器，**杀毒软件会报警（预期行为）**，
-> 原因与处理见 [`docs/02-工具说明.md`](docs/02-工具说明.md) 第 3 节。**请先读完再运行。**
+```
+README.md                  ← the file you are reading
+README.zh-CN.md            ← Chinese version
+docs/                      ★ Public documentation (each has a .txt plain-text twin)
+  01-技术报告.md           Core: conclusions for all three directions + decisive evidence + methodology
+  02-工具说明.md           Tool usage, FAQ, troubleshooting
+  03-走过的弯路.md         Retracted conclusions and overturned judgments (★ avoid repeating our mistakes)
+  04-硬件事实表.md         Register bitfields / fuse map / measured values / dangerous operations
+tools/                     Helper scripts (bandwidth test, codec probing, etc.)
+(Tool release package)     The Gen2 unlock tool, distributed as a standalone release
+notes/_archive/            [not distributed] raw process records
+_internal/                 [not distributed] workspace navigation
+```
+
+**About the tool package:** the Gen2 unlock tool ships as a **standalone release package** —
+**directory and archive names may change between versions**; refer to the Releases page and
+what you actually get after extracting. Command names (`install.cmd` / `status.cmd` /
+`check-bw.cmd` / `uninstall.cmd`) and usage are documented in
+[`docs/02-工具说明.md`](docs/02-工具说明.md).
+
+Register bitfield definitions and driver-source references live in `_scratch/refs/` in the
+development workspace (envytools rnndb + nouveau sources, **not distributed**;
+`04-硬件事实表.md` reproduces every bitfield this project actually used).
+
+---
+
+## Quick start (three steps to verify whether Gen2 is achievable)
+
+> Applies only to **NVIDIA P104-100 (`10DE:1B87`) + Windows 10/11 x64 + administrator rights**.
+> The tool needs two kernel drivers to read/write GPU registers — **antivirus will flag them
+> (expected behaviour)**; see §3 of [`docs/02-工具说明.md`](docs/02-工具说明.md) for the reason
+> and how to handle it. **Please read that first.**
 
 ```bat
-:: 1) 安装（含一次整卡复位 + 约 30 秒等待）
+:: 1) Install (includes one full device reset + ~30 s wait)
 install.cmd
 
-:: 2) 查看当前状态（不需要管理员）
+:: 2) Check current status (no admin needed)
 status.cmd
 
-:: 3) 验证带宽：Gen1 x4 ≈ 0.78 GB/s，Gen2 x4 ≈ 1.55 GB/s
+:: 3) Verify bandwidth: Gen1 x4 ≈ 0.78 GB/s, Gen2 x4 ≈ 1.55 GB/s
 check-bw.cmd
 ```
 
-`status.cmd` 会同时打印**判定所需的所有证据**：`LNKSTA`（当前链路速率）、
-`LNKCAP2`（端点声明的能力）、以及带宽实测值。**只看带宽和 `LNKSTA` 才算判据** ——
-`LNKCAP`/`LNKCAP2` 是"声称的能力"，不是当前速率。
+`status.cmd` prints **all the evidence you need to judge**: `LNKSTA` (current link speed),
+`LNKCAP2` (the endpoint's declared capabilities), and a measured bandwidth figure.
+**Only bandwidth and `LNKSTA` count as evidence** — `LNKCAP`/`LNKCAP2` are *declared
+capabilities*, not the current speed.
 
-还原：
+Roll back:
 
 ```bat
 uninstall.cmd
@@ -105,110 +119,129 @@ uninstall.cmd
 
 ---
 
-## 关键数字
+## Key numbers
 
-| 状态 | H2D（主机→显存） | D2H（显存→主机） |
+| State | H2D (host→VRAM) | D2H (VRAM→host) |
 |---|---|---|
 | x1 @ Gen1 | 0.197 GB/s | 0.209 GB/s |
 | x1 @ Gen2 | 0.390 GB/s | 0.420 GB/s |
-| **x4 @ Gen1（出厂）** | **0.778 GB/s** | **0.835 GB/s** |
-| **x4 @ Gen2（本项目成果）** | **1.55 GB/s** | **1.69 GB/s** |
-| x4 @ Gen3（理论上限，未达成） | ≈ 3.1 GB/s | ≈ 3.1 GB/s |
+| **x4 @ Gen1 (factory)** | **0.778 GB/s** | **0.835 GB/s** |
+| **x4 @ Gen2 (this project)** | **1.55 GB/s** | **1.69 GB/s** |
+| x4 @ Gen3 (theoretical ceiling, not reached) | ≈ 3.1 GB/s | ≈ 3.1 GB/s |
 
-寄存器指纹（同一张卡、同一插槽）：
+Register fingerprints (same card, same slot):
 
 ```
-               Gen1 态        Gen2 态
-LNKSTA         0x00001041     0x00001042     ← ★ 当前链路速率，唯一可靠的速率判据
-LNKCAP2        0x00000002     0x00000006     ← 端点声明支持哪些速率
-LNKCAP         0x00463C41     0x00454C42     ← 最大速率/宽度声明
+               Gen1 state     Gen2 state
+LNKSTA         0x00001041     0x00001042     ← ★ current link speed — the only reliable speed criterion
+LNKCAP2        0x00000002     0x00000006     ← which speeds the endpoint declares it supports
+LNKCAP         0x00463C41     0x00454C42     ← max speed / width declaration
 LINK_CONFIG_0  0x20585800     0x20545800
 PL_LINK_RATE   0x00110036     0x00120036
 ```
 
 ---
 
-## 测试环境（本项目的实测平台）
+## Test environment (the platform this project measured on)
 
 ```
-GPU     NVIDIA P104-100, 10DE:1B87, subsys 10DE:1237, 位置 01:00.0
-上游    00:01.0 (8086:9A01)，CPU 直连 PEG，声明 Gen4 x16
-系统    Windows 11 x64
-CPU     Intel i9-14900KS
-主板    Intel HM570 改板，BIOS THM570111
+GPU        NVIDIA P104-100, 10DE:1B87, subsys 10DE:1237, at 01:00.0
+Upstream   00:01.0 (8086:9A01), CPU-attached PEG, declares Gen4 x16
+OS         Windows 11 x64
+CPU        Intel i9-14900KS
+Board      Intel HM570 modded board, BIOS THM570111
 ```
-寄存器访问通过两个公开签名的内核驱动（WinRing0x64.sys + ThrottleStop.sys）完成。
-**换平台/换卡后结论可能不同** —— 本项目只对这一张卡、这一个平台负责，
-所有结论的覆盖边界都写在各自文档里。
+
+Register access is done through two publicly signed kernel drivers
+(`WinRing0x64.sys` + `ThrottleStop.sys`). **Conclusions may differ on another platform or
+another card** — this project is only responsible for this one card on this one platform; the
+coverage boundary of every conclusion is stated in its own document.
 
 ---
 
-## 三条结论的证据强度约定
+## Evidence-strength convention
 
-本仓库所有文档统一使用四级标注，**不允许混着说**：
+All documents in this repository use one five-level scale, **never mixed**:
 
-| 标注 | 含义 |
+| Label | Meaning |
 |---|---|
-| **【实测】** | 有可重复的硬件读数或带宽测量支撑；给出原始值 |
-| **【强支持】** | 多条独立证据指向同一结论，但没有单点决定性实验 |
-| **【推测】** | 有推理链，但缺少直接证据；明确标注为推测 |
-| **【未验证】** | 没做，或做了但结果不可解释 |
-| **【已否证】** | 曾被当作结论，后来被实验或更好的分析推翻（见 03） |
+| **【Measured】** | Backed by repeatable hardware readings or bandwidth measurements; raw values given |
+| **【Strong support】** | Multiple independent lines of evidence point the same way, but no single decisive experiment |
+| **【Inference】** | Reasoning chain exists but lacks direct evidence; explicitly labelled as inference |
+| **【Unverified】** | Not done, or done but the result is not interpretable |
+| **【Retracted】** | Once treated as a conclusion, later overturned by experiment or better analysis (see 03) |
 
 ---
 
-## 安全与免责
+## Safety & disclaimer
 
-- 本项目的所有写入操作都是**对 GPU 的 PCIe/BAR0 寄存器**，可完全还原（`uninstall.cmd`）。
-- **不刷写 VBIOS / EEPROM / Flash**（本项目明确建议不要为此刷写，理由见技术报告第 6 节）。
-- **不建议做任何硬件改造**（焊接电容等），理由见技术报告第 6 节。
-- 工具依赖的内核驱动在安全界被归类为 **BYOVD**（自带易受攻击驱动），
-  杀毒软件/反作弊会拦截，这是**预期行为**，不是误报值得投诉的问题。请自行评估环境后使用。
-- 本项目仅用于研究自己拥有的硬件。请勿用于他人设备。
-
----
-
-## 这个项目的方法学收获（也许比结论更有价值）
-
-1. **判据只能用"当前状态"**：用能力声明寄存器做速率判据，曾导致三次误报成功。
-2. **阴性结论必须配对照写入**：证明"写不进去"之前，必须先证明"同一时刻写别的寄存器能写进去"。
-3. **穷举 > 抽样**；**穷举必须记录并控制基线状态**。
-4. **"同值不同果"是隐藏变量的报警器** —— 同一个写操作在不同时间得到不同结果，一定有未识别的状态变量。
-5. **主动交代覆盖边界**：本项目的寄存器扫描只覆盖设备向主机开放的那一部分
-   （BAR0 前 1 MB 中约 23.5% 的 dword 可读；按"整页全可读"的严格口径只有 1.9%）。
-   **"没找到"和"扫过了"是两句话。**
-
-更多已作废判断与踩坑记录：[`docs/03-走过的弯路.md`](docs/03-走过的弯路.md)。
+- Every write in this project targets **GPU PCIe/BAR0 registers** and is fully reversible
+  (`uninstall.cmd`).
+- **No VBIOS / EEPROM / Flash writing** (this project explicitly advises against flashing for
+  this purpose — see §6 of the technical report).
+- **No hardware modifications recommended** (soldering capacitors, etc.) — see §6 of the
+  technical report.
+- The kernel drivers this tool relies on are classified in security circles as **BYOVD**
+  (bring your own vulnerable driver). Antivirus / anti-cheat will block them — this is
+  **expected behaviour**, not a false positive worth complaining about. Evaluate your own
+  environment before use.
+- This project is only for researching hardware you own. Do not use it on someone else's device.
 
 ---
 
-## 关于本项目的制作方式
+## Methodology takeaways (arguably more valuable than the conclusions)
 
-**本项目在研发与文档编写过程中大量使用了 AI 辅助工具。**
+1. **Only "current state" can serve as a criterion.** Using capability-declaration registers as
+   a speed criterion once produced three false "success" reports.
+2. **A negative conclusion must be paired with a control write.** Before claiming "cannot
+   write", you must first prove that "writing some *other* register at the same moment does
+   land".
+3. **Exhaustive beats sampling — but exhaustive must record and control the baseline state.**
+4. **"Same write, different result" is a hidden-variable alarm.** If an identical write gives
+   different outcomes at different times, there is an unidentified state variable.
+5. **State your coverage boundary up front.** This project's register scan only covers the
+   portion the device exposes to the host (about 23.5% of dwords in the first 1 MB of BAR0 are
+   readable; under the strict "whole page readable" criterion only 1.9%).
+   **"Not found" and "swept" are two different statements.**
 
-写在这里，是因为读者有权知道这些材料是怎么产生的。
+More retracted judgments and pitfalls: [`docs/03-走过的弯路.md`](docs/03-走过的弯路.md).
 
-### 分工
+---
 
-| 环节 | 主导方式 |
+## How this project was made
+
+**AI assistance was used extensively in the research and writing of this project.**
+
+This is stated here because readers deserve to know how these materials came about.
+
+### Division of work
+
+| Stage | Led by |
 |---|---|
-| 实验方案设计、硬件操作、数据判定、最终结论 | **人工主导**，逐条实测验证 |
-| 代码编写、文档整理、寄存器/反汇编分析、外部资料检索 | **AI 辅助完成**，再由人工复核 |
+| Experiment design, hardware operations, data judgement, final conclusions | **Human-led**, verified point by point |
+| Code, documentation, register/disassembly analysis, external research | **AI-assisted**, then human-reviewed |
 
-### 这意味着什么
+### What this means
 
-- **本文档中的每一条结论，都以可复现的实验数据为支撑**，证据强度在每处单独标注
-  （【实测】/【强支持】/【推测】/【未验证】/【已否证】）。
-- **判断内容是否可信，请以数据和实验步骤为准**，而不是以"作者是谁"为准。
-- 文中明确记录的**错误判断与作废结论**（见 [`docs/03-走过的弯路.md`](docs/03-走过的弯路.md)），
-  是研究过程中的真实情况，保留下来是为了让后来者少走同样的弯路。
+- **Every conclusion in these documents is backed by reproducible experimental data**, with its
+  evidence strength labelled individually (【Measured】/【Strong support】/【Inference】/
+  【Unverified】/【Retracted】).
+- **Judge whether the content is trustworthy by the data and the experimental steps**, not by
+  who the author is.
+- The **wrong calls and retracted conclusions** explicitly recorded here (see
+  [`docs/03-走过的弯路.md`](docs/03-走过的弯路.md)) are what actually happened during the
+  research; they are kept so that others can avoid the same dead ends.
 
-### 不意味着什么
+### What this does not mean
 
-- 不意味着结论没有经过验证 —— 恰恰相反，本项目对**阴性结论**的要求更高：
-  任何"写不进去 / 做不到"的判断，都必须配一次**通过的对照写入**，否则只能写"无法判定"。
-- 不意味着可以替代你自己的判断 —— 如果你复现出不同的结果，**以你的实测为准**。
+- It does not mean the conclusions are unverified. On the contrary, this project holds
+  **negative** conclusions to a higher standard: any "cannot write / cannot do" claim must be
+  accompanied by a **control write that lands**, otherwise it can only be written as
+  "indeterminate".
+- It does not replace your own judgement. If you reproduce different results, **your
+  measurements win**.
 
 ---
 
-*如果这份材料对你有帮助，那它的价值来自那些可以复现的实验，而不是它是由谁、用什么工具写成的。*
+*If this material is useful to you, its value comes from the experiments that can be reproduced
+— not from who wrote it or with what tools.*
