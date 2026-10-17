@@ -1,0 +1,72 @@
+NVBIOSReader 源码 / 编译说明
+========================================================
+
+【目录】
+  NVBIOSReader.cs    核心：驱动装载、PCI 扫描、VBIOS 读取、哈希
+  Program.cs         主程序：命令行模式 + 图形界面
+  app.manifest       exe 清单（声明需要管理员权限 requireAdministrator）
+  编译.cmd            一键编译脚本
+
+【依赖】
+  · Windows 自带的 .NET Framework 4.x（不用装任何 SDK / Visual Studio）
+  · 编译器：C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe
+  · bin\drivers\ 里的两个 .sys 是运行时需要的，编译本身不需要它们
+    （但发布时必须带上）
+
+【怎么编译】
+  在本目录下双击  编译.cmd
+  它会把两个 exe 输出到【上一级目录】：
+      ..\NVBIOSReader.exe          图形界面版  (/target:winexe)
+      ..\bin\NVBIOSReader-CLI.exe  命令行版    (/target:exe /define:NVBIOS_CLI)
+
+  等价的手工命令（在本目录下执行）：
+
+    set CSC=C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe
+
+    %CSC% /nologo /target:winexe /platform:x64 /optimize+ /unsafe ^
+      /r:System.dll /r:System.Drawing.dll /r:System.Windows.Forms.dll ^
+      /win32manifest:app.manifest ^
+      /out:..\NVBIOSReader.exe NVBIOSReader.cs Program.cs
+
+    %CSC% /nologo /target:exe /platform:x64 /optimize+ /unsafe /define:NVBIOS_CLI ^
+      /r:System.dll /r:System.Drawing.dll /r:System.Windows.Forms.dll ^
+      /win32manifest:app.manifest ^
+      /out:..\bin\NVBIOSReader-CLI.exe NVBIOSReader.cs Program.cs
+
+  注意三个必须的参数：
+    /unsafe              —— 代码里用指针直接读映射内存（Rd 函数）
+    /win32manifest:...   —— 让双击自动申请管理员权限
+    /define:NVBIOS_CLI   —— 只有命令行版需要；不加这个的话，不带参数运行会弹 GUI
+
+【改了目录结构为什么还能用】
+  驱动是按【exe 自身所在目录】找的（NVBIOSReader.ExeDir = 程序集路径，
+  不是 Environment.CurrentDirectory）。查找顺序：
+
+      <exe目录>\bin\drivers\
+      <exe目录>\drivers\
+      <exe目录>\
+      <exe目录>\..\bin\drivers\
+      <exe目录>\..\drivers\
+      <exe目录>\..
+
+  ⇒ 所以 exe 放根目录、驱动放 bin\drivers\（当前发布结构）能工作；
+    exe 和驱动都放 bin\ 也能工作；驱动和 exe 放一起也能工作。
+
+【v1.2 修的问题（对照旧源码看）】
+  1. GUI 里驱动诊断日志被 Console.WriteLine 吞掉（winexe 没控制台）
+     → 改成写界面日志框
+  2. Refresh_Click 里的 logBox.Clear() 会把"驱动装载"日志抹掉
+     → 去掉 Clear，改成加分隔线
+  3. -save 不带目录时默认用 Environment.CurrentDirectory（提权后常是 System32）
+     → 改成 <exe目录>\VBIOS备份\
+  4. GuessRomSize() 在 off=0x80000 时数组越界
+     → 加边界检查
+  5. 复制到 %TEMP% 的驱动副本从不清理
+     → 停/删服务后自动删除
+  6. 驱动路径只认 <exe>\drivers\ 和 <exe>\
+     → 改成 FindDriverFile() 多路径查找
+  7. WinRing0 设备被其它同类工具占用时，只报一句看不懂的失败
+     → 打开失败重试 3 次 + 明确提示"可能是其它工具正占用"
+  8. 没有管理员权限时只干巴巴提示，新手容易卡住
+     → app.manifest 声明 requireAdministrator + 运行期 UAC 自动提权
+  9. 新增【读取（只看）】按钮（以前想看 MD5 也必须先存文件）
