@@ -117,3 +117,19 @@ If you break something while using it, that is your responsibility.
 
 *If this tool saves you time, the value is in the measurements behind it: always verify with
 `status.cmd` and `check-bw.cmd` on your own card.*
+
+---
+
+## Linux port (community test / untested)
+
+Same mechanism as the Windows tool, but implemented with `setpci` (no kernel driver needed):
+
+```bash
+sudo ./linux/p104-gen2-oneclick.sh           # one-click: apply Gen2
+sudo ./linux/p104-gen2-oneclick.sh --status  # read-only
+sudo ./linux/p104-gen2-oneclick.sh --restore # revert
+```
+
+See [`linux/README-LINUX.md`](linux/README-LINUX.md) for details and risks.
+
+> Not yet validated on real hardware. If you test it, please report `lspci -vv` and the script output in Issues.
