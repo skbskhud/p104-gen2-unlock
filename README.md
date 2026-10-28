@@ -117,16 +117,3 @@ If you break something while using it, that is your responsibility.
 
 *If this tool saves you time, the value is in the measurements behind it: always verify with
 `status.cmd` and `check-bw.cmd` on your own card.*
-
----
-
-## Linux port (community test)
-
-A Linux port of the Gen2 unlock is available under [`linux/`](linux/) — it uses `setpci` instead of a kernel driver:
-
-```bash
-sudo ./linux/p104-gen2-linux.sh          # read-only status
-sudo ./linux/p104-gen2-linux.sh --apply  # apply Gen2
-```
-
-> **Untested on real hardware.** The same registers are written as on Windows, but the Linux path has not yet been validated on a real P104. Please report `lspci -vv` output in Issues if you test it.
