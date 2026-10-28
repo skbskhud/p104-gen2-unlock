@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================================
-#  P104 / P106 PCIe Gen2 x4 解锁 —— Linux 一键脚本
+#  P104 PCIe Gen2 x4 解锁 —— Linux 一键脚本
 #
 #  用法（普通用户直接运行，会自动请求 sudo）：
 #      bash p104-gen2-oneclick.sh            # 一键解锁（推荐）
@@ -17,8 +17,8 @@ set -uo pipefail
 
 STATE_DIR="/var/tmp/p104-gen2"
 LOG_FILE="$STATE_DIR/last-run.log"
-PCI_IDS=("1b87" "1bc7" "1c07" "1c09" "1b07")
-MODEL_HINT="P104/P106/P102"
+PCI_IDS=("1b87" "1bc7")
+MODEL_HINT="P104"
 
 MODE="apply"
 case "${1:-}" in
