@@ -1,3 +1,5 @@
+> **新版（Gen2 x4 + 宽度声明 x16，Windows 一键工具，手动/自动双版本）**：https://github.com/skbskhud/p104-unlock-v3
+
 # P104-100 PCIe Gen2 x4 Unlock
 
 **English** | [中文](README.zh-CN.md)
