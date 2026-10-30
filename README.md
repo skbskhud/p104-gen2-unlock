@@ -1,5 +1,5 @@
-> **新版（Gen2 x4 + 宽度声明 x16，Windows 一键工具，手动/自动双版本）**：https://github.com/skbskhud/p104-unlock-v3
-
+> **Latest v3.3 (Gen2 x4 + x16 declaration + 20 ms recovery + width retrain, Windows one-click)**: download from this repo's Releases; source/methodology/deep docs -> https://github.com/skbskhud/p104-unlock-v3
+
 # P104-100 PCIe Gen2 x4 Unlock
 
 **English** | [中文](README.zh-CN.md)
