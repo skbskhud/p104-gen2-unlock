@@ -1,3 +1,5 @@
+> **最新版 v3.3（Gen2 x4 + x16 声明 + 20ms 恢复 + 宽度重训，Windows 一键工具）**：本仓库 Releases 直接下载；源码/方法论/深入文档 → https://github.com/skbskhud/p104-unlock-v3
+
 # P104-100 PCIe Gen2 x4 解锁工具
 
 **[English](README.md)** | 中文
