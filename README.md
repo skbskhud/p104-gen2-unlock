@@ -2,6 +2,8 @@
 
 > **Recommended: v3.3 (`P104-2.0x16-v1.2.zip`)** — the old v1.6 still works, but v3.3 restores drops in **0.23 s** (20 ms watchdog) and is noticeably more stable in games (fewer frame/bandwidth dips).
 > Download: https://github.com/skbskhud/p104-unlock-v3/releases/tag/v3.3 | ⚠️ Physical x16 is not yet achieved (still x4 after cap mod); see `docs/09` in the new repo.
+
+**GPU-Z shows 1.1 / 2.0 flapping?** That is unsynchronized sampling, not an unstable link: the tool restores within 0.2–0.5 s while the monitor may sample that exact moment. See "Why drops still happen" in the new repo README.
 
 # P104-100 PCIe Gen2 x4 Unlock
 
