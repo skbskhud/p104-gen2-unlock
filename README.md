@@ -1,3 +1,5 @@
+<h2><strong>2026-11-01: Due to current technical limitations, physical x16 on the P104 is not achievable at this time; this project will be on an extended hiatus for further exploration.</strong></h2>
+
 > **Latest v3.3 (Gen2 x4 + x16 declaration + 20 ms recovery + width retrain, Windows one-click)**: download from this repo's Releases; source/methodology/deep docs -> https://github.com/skbskhud/p104-unlock-v3
 
 > **Recommended: v3.3 (`P104-2.0x16-v1.2.zip`)** — the old v1.6 still works, but v3.3 restores drops in **0.23 s** (20 ms watchdog) and is noticeably more stable in games (fewer frame/bandwidth dips).
